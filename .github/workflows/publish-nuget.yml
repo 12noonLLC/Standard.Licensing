@@ -1,0 +1,70 @@
+# .github/workflows/publish-nuget.yml
+#
+# Manual NuGet publish workflow for Standard.Licensing.12noon.
+#
+# - Triggered only by manual dispatch.
+# - Requires environment approval before publishing.
+# - Restores, builds, and packs the multi-targeted package before publishing to NuGet.org.
+
+name: Publish NuGet Package
+
+on:
+  workflow_dispatch:
+
+env:
+  PROJECT_PATH: src/Standard.Licensing/Standard.Licensing.csproj
+  BUILD_CONFIGURATION: Release
+  PUBLISH_FILES_PATH: ${{ github.workspace }}/artifacts/package
+
+jobs:
+  publish_nuget:
+    name: 🚀 Publish NuGet package
+    # TODO: Change back when Windows 2025 with VS2026 is available. (4 May 2026)
+    # runs-on: windows-latest
+    runs-on: windows-2025-vs2026
+    environment: nuget-prod
+    permissions:
+      contents: read
+
+    steps:
+      - name: 🧾 Check out repository
+        uses: actions/checkout@v6
+
+      - name: 🛠️ Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            6.0.x
+            8.0.x
+            9.0.x
+            10.0.x
+          dotnet-quality: ga
+
+      - name: 📦 Restore NuGet package project
+        run: |
+          dotnet restore "${{ env.PROJECT_PATH }}"
+
+      - name: 🧩 Build NuGet package project
+        run: |
+          dotnet build `
+            "${{ env.PROJECT_PATH }}" `
+            --configuration ${{ env.BUILD_CONFIGURATION }} `
+            --no-restore
+
+      - name: 🧳 Pack NuGet package
+        run: |
+          dotnet pack `
+            "${{ env.PROJECT_PATH }}" `
+            --configuration ${{ env.BUILD_CONFIGURATION }} `
+            --no-restore `
+            --no-build `
+            --output "${{ env.PUBLISH_FILES_PATH }}"
+
+      - name: 🚀 Publish NuGet package to NuGet.org
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.API_KEY_NUGET }}
+        run: |
+          dotnet nuget push "${{ env.PUBLISH_FILES_PATH }}/*.nupkg" `
+            --source "https://api.nuget.org/v3/index.json" `
+            --api-key "$NUGET_AUTH_TOKEN" `
+            --skip-duplicate
